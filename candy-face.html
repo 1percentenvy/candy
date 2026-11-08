@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Candy Face</title>
+<style>
+:root{--bg:#fff4e8;--ink:#3a2340;--card:#ffffff;--acc:#ff4f87;--ok:#2fbf71;--bad:#e5484d;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#241530;--ink:#fbeaff;--card:#35214a}}
+:root[data-theme="dark"]{--bg:#241530;--ink:#fbeaff;--card:#35214a}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:ui-rounded,"Nunito",system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;touch-action:none;user-select:none}
+#hud{width:100%;max-width:420px;display:flex;justify-content:space-between;padding:10px 16px;font-weight:700;box-sizing:border-box}
+#wrap{position:relative;width:100%;max-width:420px;flex:1;min-height:0}
+canvas{width:100%;height:100%;display:block;object-fit:contain}
+#ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:color-mix(in srgb,var(--bg) 82%,transparent);text-align:center;padding:20px}
+#ov h1{margin:0;font-size:34px}#ov p{margin:0;max-width:300px;font-size:14px;line-height:1.4}
+button{font:inherit;font-weight:700;border:0;border-radius:14px;padding:12px 20px;background:var(--acc);color:#fff}
+button.alt{background:var(--card);color:var(--ink);border:2px solid var(--acc)}
+#bar{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;padding:6px 8px}
+#bar button{padding:7px 10px;font-size:13px;background:var(--card);color:var(--ink);border:2px solid var(--acc)}
+#bar button.on{background:var(--acc);color:#fff}
+#msg{font-size:12px;min-height:16px;opacity:.8;padding:0 12px 4px;text-align:center}
+video{position:absolute;right:8px;top:8px;width:84px;border-radius:10px;transform:scaleX(-1);display:none}
+</style></head><body>
+<div id="hud"><span id="t">0.0s</span><span id="best">Best: –</span></div>
+<div id="wrap"><canvas id="c" width="360" height="520"></canvas><video id="v" playsinline muted></video>
+<div id="ov"><h1>🍬 Candy Face</h1>
+<p>Move the part of your face the candy is on. The highlighted zone shows which muscles work: brows on the forehead, squint at the eyes, sneer beside the nose, smile and frown at the mouth. Each pulls the candy toward its side. Steer around the nose, then open wide!</p>
+<button id="goCam">Play with camera</button><button class="alt" id="goTouch">Play with touch / keys</button><p id="info"></p></div></div>
+<div id="bar"><button id="bBrow">Brows up</button><button id="bFur">Brows together</button><button id="bSqL">Squint L</button><button id="bSqR">Squint R</button><button id="bSnL">Sneer L</button><button id="bSnR">Sneer R</button><button id="bSmL">Smile L</button><button id="bSmR">Smile R</button><button id="bFrown">Frown</button><button id="bJaw">Mouth</button><button id="bInv">Flip tilt</button></div>
+<div id="live" style="font-size:12px;font-weight:700;min-height:16px"></div><div id="msg">Keys: arrows tilt · space/B brows · Z/X squint · Q/W sneer · A/S smile · F frown · M mouth</div>
+<script>
+const cv=document.getElementById('c'),g=cv.getContext('2d'),W=360,H=520,CX=180,CY=270;
+const $=id=>document.getElementById(id);
+const P=[[0,-135],[0,-95],[0,-25],[0,50],[0,92]];
+let mode='touch',st='ready',S,inp={roll:0,pitch:0,brow:0,furrow:0,sqL:0,sqR:0,sneerL:0,sneerR:0,smileL:0,smileR:0,frown:0,puff:0,jaw:0},tgt={roll:0,pitch:0,brow:0,furrow:0,sqL:0,sqR:0,sneerL:0,sneerR:0,smileL:0,smileR:0,frown:0,puff:0,jaw:0};
+let neutral={roll:0,pitch:0},inv=1,keys={},drag=null,lm=null,tm=0,best=null,fall=null;
+const ui={brow:0,furrow:0,sqL:0,sqR:0,sneerL:0,sneerR:0,smileL:0,smileR:0,frown:0,puff:0,jaw:0};
+const ZN=[[-200,-48,'BROWS'],[-48,-12,'SQUINT'],[-12,55,'SNEER'],[55,200,'SMILE / FROWN']];
+function reset(){S={s:.08,vs:0,x:0,vx:0,t:0,browPrev:0,cool:0}}
+reset();
+function pos(s,x){const f=Math.max(0,Math.min(1,s))*(P.length-1),i=Math.min(P.length-2,Math.floor(f)),u=f-i;
+ return[P[i][0]+(P[i+1][0]-P[i][0])*u+x*58,P[i][1]+(P[i+1][1]-P[i][1])*u]}
+function start(m){mode=m;$('ov').style.display='none';reset();st='play';fall=null;
+ neutral={roll:inp.rawRoll||0,pitch:inp.rawPitch||0};if(m==='cam'&&inp.dL)base={L:inp.dL,R:inp.dR};tm=performance.now()}
+$('goTouch').onclick=()=>start('touch');
+$('goCam').onclick=async()=>{$('info').textContent='Loading face tracking…';
+ try{
+  const m=await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm');
+  const fs=await m.FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
+  lm=await m.FaceLandmarker.createFromOptions(fs,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',delegate:'GPU'},runningMode:'VIDEO',numFaces:1,outputFaceBlendshapes:true,outputFacialTransformationMatrixes:true});
+  const v=$('v');v.srcObject=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'}});await v.play();v.style.cssText='display:block;width:2px;height:2px;opacity:0;pointer-events:none';
+  $('info').textContent='Hold your head comfortably, then…';
+  setTimeout(()=>start('cam'),1500);
+ }catch(e){$('info').textContent='Camera tracking couldn’t start here ('+(e.message||e)+'). Use touch / keys, or open this file on your own host.'}};
+$('bInv').onclick=()=>{inv*=-1;$('bInv').classList.toggle('on')};
+[['bBrow','brow'],['bFur','furrow'],['bSqL','sqL'],['bSqR','sqR'],['bSnL','sneerL'],['bSnR','sneerR'],['bSmL','smileL'],['bSmR','smileR'],['bFrown','frown'],['bJaw','jaw']].forEach(([b,k])=>{const e=$(b);
+ e.onpointerdown=ev=>{ev.stopPropagation();ui[k]=1;e.classList.add('on')};
+ ['pointerup','pointerleave','pointercancel'].forEach(n=>e.addEventListener(n,()=>{ui[k]=0;e.classList.remove('on')}))});
+addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=1;if(e.key===' ')e.preventDefault()});
+addEventListener('keyup',e=>keys[e.key.toLowerCase()]=0);
+cv.onpointerdown=e=>{drag={x:e.clientX,y:e.clientY}};
+addEventListener('pointermove',e=>{if(drag&&mode==='touch'){tgt.roll=Math.max(-45,Math.min(45,(e.clientX-drag.x)*.2));tgt.pitch=Math.max(-45,Math.min(45,(e.clientY-drag.y)*.2))}});
+addEventListener('pointerup',()=>{drag=null;tgt.roll=0;tgt.pitch=0});
+function readInput(dt){
+ if(mode==='cam'&&lm&&$('v').readyState>=2){
+  const r=lm.detectForVideo($('v'),performance.now());face=(r.faceLandmarks&&r.faceLandmarks[0])||null;
+  if(r.facialTransformationMatrixes&&r.facialTransformationMatrixes[0]){const m=r.facialTransformationMatrixes[0].data,d=180/Math.PI;
+   inp.rawPitch=Math.asin(Math.max(-1,Math.min(1,-m[9])))*d*inv;inp.rawRoll=Math.atan2(m[1],m[5])*d*inv;
+   tgt.pitch=inp.rawPitch-neutral.pitch;tgt.roll=inp.rawRoll-neutral.roll}
+  const b={};(r.faceBlendshapes[0]?.categories||[]).forEach(c=>b[c.categoryName]=c.score);
+  tgt.brow=(b.browInnerUp||0)>.45?1:0;tgt.furrow=((b.browDownLeft||0)+(b.browDownRight||0))/2>.22?1:0;tgt.sqL=(b.eyeSquintLeft||0)>.5?1:0;tgt.sqR=(b.eyeSquintRight||0)>.5?1:0;let gL=0,gR=0;if(face){const v=$('v'),w=v.videoWidth,h=v.videoHeight,D=(a,c)=>Math.hypot((face[a].x-face[c].x)*w,(face[a].y-face[c].y)*h),fw=D(234,454);inp.dL=D(358,267)/fw;inp.dR=D(129,37)/fw;if(base){gL=(base.L-inp.dL)/base.L*2.5;gR=(base.R-inp.dR)/base.R*2.5}}const snL=Math.max(b.noseSneerLeft||0,.8*(b.mouthUpperUpLeft||0),gL),snR=Math.max(b.noseSneerRight||0,.8*(b.mouthUpperUpRight||0),gR);window.dbg=snL.toFixed(2)+' / '+snR.toFixed(2);tgt.sneerL=snL>.1?1:0;tgt.sneerR=snR>.1?1:0;tgt.smileL=(b.mouthSmileLeft||0)>.5?1:0;tgt.smileR=(b.mouthSmileRight||0)>.5?1:0;tgt.frown=((b.mouthFrownLeft||0)+(b.mouthFrownRight||0))/2>.4?1:0;tgt.puff=(b.cheekPuff||0)>.4?1:0;tgt.jaw=(b.jawOpen||0)>.45?1:0;
+ }else{
+  if(!drag){let dr=(keys.arrowright?1:0)-(keys.arrowleft?1:0),dp=(keys.arrowdown?1:0)-(keys.arrowup?1:0);
+   if(dr||dp){tgt.roll=Math.max(-45,Math.min(45,tgt.roll+dr*70*dt));tgt.pitch=Math.max(-45,Math.min(45,tgt.pitch+dp*70*dt))}else{tgt.roll*=.9;tgt.pitch*=.9}}
+  tgt.brow=(keys[' ']||ui.brow)?1:0;tgt.furrow=(keys.b||ui.furrow)?1:0;tgt.sqL=(keys.z||ui.sqL)?1:0;tgt.sqR=(keys.x||ui.sqR)?1:0;tgt.sneerL=(keys.q||ui.sneerL)?1:0;tgt.sneerR=(keys.w||ui.sneerR)?1:0;tgt.smileL=(keys.a||ui.smileL)?1:0;tgt.smileR=(keys.s||ui.smileR)?1:0;tgt.frown=(keys.f||ui.frown)?1:0;tgt.puff=(keys.shift||ui.puff)?1:0;tgt.jaw=(keys.m||ui.jaw)?1:0}
+ const k=Math.min(1,dt*12);for(const n in tgt)inp[n]+=(tgt[n]-inp[n])*k}
+function update(dt){
+ S.t=(performance.now()-tm)/1000;$('t').textContent=S.t.toFixed(1)+'s';
+ const wob=(.5+S.s)*Math.sin(S.t*2.3)*1.6+Math.sin(S.t*5.1)*.8; // wobble grows down the face
+ const p=inp.pitch+wob*(mode==='cam'?0:1),ro=inp.roll;
+ const push=Math.abs(p)<3?0:(p-Math.sign(p)*3);
+ const y=pos(S.s,S.x)[1],zw=i=>Math.max(0,Math.min(1,(y-ZN[i][0])/10))*Math.max(0,Math.min(1,(ZN[i][1]-y)/10)),zB=zw(0),zE=zw(1),zN=zw(2),zM=zw(3);
+ S.vs+=(.008*push+.45*zB*(inp.furrow-inp.brow)+.25*zE*(inp.sqL+inp.sqR)+.2*zN*(inp.sneerL+inp.sneerR)+.3*zM*(inp.smileL+inp.smileR))*dt;
+ S.vs*=1-(inp.puff>.5?5:1.8)*dt;const ps=S.s;S.s+=S.vs*dt;
+ S.vx+=(.6*Math.sin(ro*Math.PI/180)+1.8*(zE*(inp.sqR-inp.sqL)+zN*(inp.sneerR-inp.sneerL)+zM*(inp.smileR-inp.smileL))-9*zM*S.x*inp.frown)*dt;S.vx*=1-(2.5+3*zM*inp.frown)*dt;S.x+=S.vx*dt;
+ if(S.s>.5&&S.s<.8&&Math.abs(S.x)<.45){if(ps<=.5){S.s=.5;if(S.vs>0)S.vs=0}else if(ps>=.8){S.s=.8;if(S.vs<0)S.vs=0}else{S.x=S.x<0?-.45:.45;S.vx=0}}
+ const lim=32-14*S.s;S.risk=Math.max(p/lim,-p/26,Math.abs(ro)/30);
+ let why=null;if(p>lim)why='Too far forward!';else if(p<-26||S.s<0)why='Slid off the back!';else if(Math.abs(ro)>30||Math.abs(S.x)>1)why='Rolled off the side!';
+ if(S.s>.95){S.s=.95;S.vs=0;if(inp.jaw>.5&&Math.abs(S.x)<.45)return win()}
+ if(why)drop(why)}
+function toWorld(l){const r=inp.roll*Math.PI/180;return[CX+l[0]*Math.cos(r)-l[1]*Math.sin(r),CY+l[0]*Math.sin(r)+l[1]*Math.cos(r)]}
+let face=null,faceSc=1,base=null;
+const KP=[[-135,10],[-70,9],[-40,168],[-12,195],[30,4],[55,2],[92,0],[108,13]];
+function lp(i){const v=$('v'),sc=Math.max(W/v.videoWidth,H/v.videoHeight),l=face[i];return[W-((W-v.videoWidth*sc)/2+l.x*v.videoWidth*sc),(H-v.videoHeight*sc)/2+l.y*v.videoHeight*sc]}
+function toScreen(x,y){let i=0;while(i<KP.length-2&&y>KP[i+1][0])i++;const a=KP[i],b=KP[i+1],u=Math.max(-.3,Math.min(1.3,(y-a[0])/(b[0]-a[0]))),A=lp(a[1]),B=lp(b[1]),L=lp(454),R=lp(234),dx=R[0]-L[0],dy=R[1]-L[1];faceSc=Math.hypot(dx,dy)/240;return[A[0]+(B[0]-A[0])*u+dx*x/240,A[1]+(B[1]-A[1])*u+dy*x/240]}
+function drawAR(){const v=$('v');if(v.videoWidth){const sc=Math.max(W/v.videoWidth,H/v.videoHeight);g.save();g.translate(W,0);g.scale(-1,1);g.drawImage(v,(W-v.videoWidth*sc)/2,(H-v.videoHeight*sc)/2,v.videoWidth*sc,v.videoHeight*sc);g.restore()}
+ if(st==='play'){const cy=pos(S.s,S.x)[1];ZN.forEach(z=>{const y0=Math.max(z[0],-140),y1=Math.min(z[1],118),on=cy>=z[0]&&cy<z[1],p=[[-110,y0],[110,y0],[110,y1],[-110,y1]].map(q=>toScreen(q[0],q[1]));g.fillStyle=on?'rgba(255,210,63,.4)':'rgba(255,255,255,.07)';g.beginPath();p.forEach((q,i)=>i?g.lineTo(q[0],q[1]):g.moveTo(q[0],q[1]));g.closePath();g.fill();if(on){g.fillStyle='#fff';g.font='bold 12px sans-serif';g.fillText(z[2],p[0][0]+6,p[0][1]+16)}})}}
+function drop(why){const q0=pos(S.s,S.x),w=face&&mode==='cam'?toScreen(q0[0],q0[1]):toWorld(q0);fall={x:w[0],y:w[1],vx:S.vx*60+inp.roll*4,vy:-60,r:0,t:0,why};st='fall'}
+function win(){st='won';const t=S.t;if(best===null||t<best){best=t;$('best').textContent='Best: '+t.toFixed(1)+'s'}
+ end('😋 Yum! '+t.toFixed(1)+'s','Play again')}
+function end(h,b){const o=$('ov');o.innerHTML='<h1>'+h+'</h1><button id="again">'+b+'</button>';o.style.display='flex';
+ $('again').onclick=()=>{o.style.display='none';reset();st='play';fall=null;tm=performance.now();if(mode==='cam'){neutral={roll:inp.rawRoll||0,pitch:inp.rawPitch||0}}}}
+function candy(x,y,r,sc=1){g.save();g.translate(x,y);g.rotate(r);g.scale(sc,sc);g.fillStyle='#ffd23f';
+ g.beginPath();g.moveTo(-13,0);g.lineTo(-26,-9);g.lineTo(-26,9);g.closePath();g.fill();
+ g.beginPath();g.moveTo(13,0);g.lineTo(26,-9);g.lineTo(26,9);g.closePath();g.fill();
+ g.fillStyle='#ff4f87';g.beginPath();g.arc(0,0,15,0,7);g.fill();
+ g.strokeStyle='#fff';g.lineWidth=4;g.beginPath();g.arc(0,0,8,.3,2.3);g.stroke();g.restore()}
+function draw(){const nm={brow:'brows up',furrow:'brows together',sqL:'squint L',sqR:'squint R',sneerL:'sneer L',sneerR:'sneer R',smileL:'smile L',smileR:'smile R',frown:'frown',jaw:'mouth open'};$('live').textContent='Detected: '+(Object.keys(nm).filter(k=>inp[k]>.5).map(k=>nm[k]).join(', ')||'–')+(mode==='cam'?'   [sneer score L/R: '+(window.dbg||'')+']':'');
+ g.clearRect(0,0,W,H);const r=inp.roll*Math.PI/180,risk=st==='play'?Math.min(1,Math.max(0,(S.risk-.6)/.4)):0;
+ if(face&&mode==='cam')drawAR();else{g.save();g.translate(CX,CY);g.rotate(r);g.scale(1,Math.cos(Math.max(-.5,Math.min(.5,inp.pitch*Math.PI/180*.5))));
+ g.fillStyle='#ffd7b5';g.strokeStyle=`rgb(${60+195*risk|0},${190-120*risk|0},${110-30*risk|0})`;g.lineWidth=7;
+ g.beginPath();g.ellipse(0,0,120,165,0,0,7);g.fill();g.stroke();
+ if(st==='play'){const cy=pos(S.s,S.x)[1];g.save();g.beginPath();g.ellipse(0,0,120,165,0,0,7);g.clip();ZN.forEach(z=>{const on=cy>=z[0]&&cy<z[1];g.fillStyle=on?'rgba(255,210,63,.45)':'rgba(255,255,255,.08)';g.fillRect(-120,z[0],240,z[1]-z[0]);if(on){g.fillStyle='#3a2340';g.font='bold 11px sans-serif';g.fillText(z[2],-100,Math.max(z[0],-150)+(z[0]<-150?30:14))}});g.restore()}
+ g.fillStyle='#3a2340';[-45,45].forEach(x=>{g.beginPath();g.ellipse(x,-40,9,12*(1-.75*(x<0?inp.sqL:inp.sqR)),0,0,7);g.fill()});
+ g.strokeStyle='#3a2340';g.lineWidth=6;g.lineCap='round';[-45,45].forEach(x=>{const y=-68-16*inp.brow+12*inp.furrow;g.beginPath();g.moveTo(x-18,y+4);g.lineTo(x+18,y-(x<0?-4:4)*0+0);g.stroke()});
+ g.fillStyle='#efae88';g.strokeStyle='#d99a78';g.lineWidth=3;g.beginPath();g.moveTo(-14,-30);g.quadraticCurveTo(-28,40,-22,56);g.quadraticCurveTo(0,70,22,56);g.quadraticCurveTo(28,40,14,-30);g.closePath();g.fill();g.stroke();
+ if(inp.puff>.5){g.fillStyle='#ff9aa8';[-70,70].forEach(x=>{g.beginPath();g.arc(x,50,22,0,7);g.fill()})}
+ g.fillStyle='#a8324f';g.beginPath();g.ellipse(0,108,28+(inp.puff>.5?-8:0),6+30*inp.jaw,0,0,7);g.fill();
+ g.restore()}
+ if(st==='play'){const q0=pos(S.s,S.x),ar=face&&mode==='cam',q=ar?toScreen(q0[0],q0[1]):toWorld(q0);candy(q[0],q[1],S.s*8+S.x,ar?faceSc:1)}
+ if(fall)candy(fall.x,fall.y,fall.r);
+ if(st==='play'){g.fillStyle='rgba(120,120,120,.3)';g.fillRect(40,H-14,280,8);g.fillStyle=risk>0.5?'#e5484d':'#2fbf71';g.fillRect(40,H-14,280*Math.min(1,S.risk),8)}}
+let last=performance.now();
+(function loop(now){const dt=Math.min(.05,(now-last)/1000);last=now;
+ if(st==='play'||st==='ready'){readInput(dt)}
+ if(st==='play')update(dt);
+ if(st==='fall'){fall.t+=dt;fall.vy+=1500*dt;fall.x+=fall.vx*dt;fall.y+=fall.vy*dt;fall.r+=dt*7;
+  if(fall.t>1){st='lost';end('💥 '+fall.why,'Try again')}}
+ draw();requestAnimationFrame(loop)})(performance.now());
+</script></body></html>
