@@ -43,11 +43,11 @@ function pos(s,x){const f=Math.max(0,Math.min(1,s))*(P.length-1),i=Math.min(P.le
 function start(m){mode=m;$('ov').style.display='none';reset();st='play';fall=null;
  neutral={roll:inp.rawRoll||0,pitch:inp.rawPitch||0};if(m==='cam'&&inp.dL)base={L:inp.dL,R:inp.dR};tm=performance.now()}
 $('goTouch').onclick=()=>start('touch');
-$('goCam').onclick=async()=>{$('info').textContent='Loading face tracking…';
+$('goCam').onclick=async()=>{$('info').textContent='Loading face tracking…';setTimeout(()=>{if(!lm)$('info').textContent+=' (taking long – tell me the last message you see)'},25000);
  try{
-  const m=await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm');
-  const fs=await m.FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
-  const mk=d=>m.FaceLandmarker.createFromOptions(fs,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',delegate:d},runningMode:'VIDEO',numFaces:1,outputFaceBlendshapes:true,outputFacialTransformationMatrixes:true});try{lm=await mk('GPU')}catch(e){$('info').textContent='Trying slower mode…';lm=await mk('CPU')}
+  const m=await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs');
+  $('info').textContent='Loading tracker files…';let fs=await m.FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
+  const mk=d=>m.FaceLandmarker.createFromOptions(fs,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',delegate:d},runningMode:'VIDEO',numFaces:1,outputFaceBlendshapes:true,outputFacialTransformationMatrixes:true});$('info').textContent='Loading face model…';let err;for(const u of ['https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm','https://unpkg.com/@mediapipe/tasks-vision@0.10.14/wasm']){try{$('info').textContent='Loading face model…';fs=await m.FilesetResolver.forVisionTasks(u);lm=await mk('CPU');break}catch(e){err=e}}if(!lm)throw err
   $('info').textContent='Starting camera…';const v=$('v');v.srcObject=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'}});await v.play();v.style.cssText='display:block;width:2px;height:2px;opacity:0;pointer-events:none';
   $('info').textContent='Hold your head comfortably, then…';
   setTimeout(()=>start('cam'),1500);
