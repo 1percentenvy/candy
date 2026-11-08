@@ -68,7 +68,7 @@ function readInput(dt){
    inp.rawPitch=Math.asin(Math.max(-1,Math.min(1,-m[9])))*d*inv;inp.rawRoll=Math.atan2(m[1],m[5])*d*inv;
    tgt.pitch=inp.rawPitch-neutral.pitch;tgt.roll=inp.rawRoll-neutral.roll}
   const b={};(r.faceBlendshapes[0]?.categories||[]).forEach(c=>b[c.categoryName]=c.score);
-  tgt.brow=(b.browInnerUp||0)>.45?1:0;tgt.furrow=((b.browDownLeft||0)+(b.browDownRight||0))/2>.22?1:0;tgt.sqL=(b.eyeSquintLeft||0)>.5?1:0;tgt.sqR=(b.eyeSquintRight||0)>.5?1:0;let gL=0,gR=0;if(face){const v=$('v'),w=v.videoWidth,h=v.videoHeight,D=(a,c)=>Math.hypot((face[a].x-face[c].x)*w,(face[a].y-face[c].y)*h),fw=D(234,454);inp.dL=D(358,267)/fw;inp.dR=D(129,37)/fw;if(base){gL=(base.L-inp.dL)/base.L*2.5;gR=(base.R-inp.dR)/base.R*2.5}}const snL=Math.max(b.noseSneerLeft||0,.8*(b.mouthUpperUpLeft||0),gL),snR=Math.max(b.noseSneerRight||0,.8*(b.mouthUpperUpRight||0),gR);window.dbg=snL.toFixed(2)+' / '+snR.toFixed(2);tgt.sneerL=snL>.1?1:0;tgt.sneerR=snR>.1?1:0;tgt.smileL=(b.mouthSmileLeft||0)>.5?1:0;tgt.smileR=(b.mouthSmileRight||0)>.5?1:0;tgt.frown=((b.mouthFrownLeft||0)+(b.mouthFrownRight||0))/2>.4?1:0;tgt.puff=(b.cheekPuff||0)>.4?1:0;tgt.jaw=(b.jawOpen||0)>.45?1:0;
+  tgt.brow=(b.browInnerUp||0)>.45?1:0;tgt.furrow=((b.browDownLeft||0)+(b.browDownRight||0))/2>.22?1:0;tgt.sqL=(b.eyeSquintLeft||0)>.5?1:0;tgt.sqR=(b.eyeSquintRight||0)>.5?1:0;let gL=0,gR=0;if(face){const v=$('v'),w=v.videoWidth,h=v.videoHeight,D=(a,c)=>Math.hypot((face[a].x-face[c].x)*w,(face[a].y-face[c].y)*h),fw=D(234,454);inp.dL=D(358,267)/fw;inp.dR=D(129,37)/fw;if(base){gL=(base.L-inp.dL)/base.L*2.5;gR=(base.R-inp.dR)/base.R*2.5}}const snL=Math.max(b.noseSneerLeft||0,.8*(b.mouthUpperUpLeft||0),gL),snR=Math.max(b.noseSneerRight||0,.8*(b.mouthUpperUpRight||0),gR);window.dbg=snL.toFixed(2)+' / '+snR.toFixed(2);tgt.sneerL=snL>.018?Math.min(1,snL/.05):0;tgt.sneerR=snR>.018?Math.min(1,snR/.05):0;tgt.smileL=(b.mouthSmileLeft||0)>.5?1:0;tgt.smileR=(b.mouthSmileRight||0)>.5?1:0;tgt.frown=((b.mouthFrownLeft||0)+(b.mouthFrownRight||0))/2>.4?1:0;tgt.puff=(b.cheekPuff||0)>.4?1:0;tgt.jaw=(b.jawOpen||0)>.45?1:0;
  }else{
   if(!drag){let dr=(keys.arrowright?1:0)-(keys.arrowleft?1:0),dp=(keys.arrowdown?1:0)-(keys.arrowup?1:0);
    if(dr||dp){tgt.roll=Math.max(-45,Math.min(45,tgt.roll+dr*70*dt));tgt.pitch=Math.max(-45,Math.min(45,tgt.pitch+dp*70*dt))}else{tgt.roll*=.9;tgt.pitch*=.9}}
@@ -80,9 +80,9 @@ function update(dt){
  const p=inp.pitch+wob*(mode==='cam'?0:1),ro=inp.roll;
  const push=Math.abs(p)<3?0:(p-Math.sign(p)*3);
  const y=pos(S.s,S.x)[1],zw=i=>Math.max(0,Math.min(1,(y-ZN[i][0])/10))*Math.max(0,Math.min(1,(ZN[i][1]-y)/10)),zB=zw(0),zE=zw(1),zN=zw(2),zM=zw(3);
- S.vs+=(.008*push+.45*zB*(inp.furrow-inp.brow)+.25*zE*(inp.sqL+inp.sqR)+.2*zN*(inp.sneerL+inp.sneerR)+.3*zM*(inp.smileL+inp.smileR))*dt;
+ S.vs+=(.3*zB*(inp.furrow-inp.brow)+.3*zE*(inp.sqL+inp.sqR)+.2*zN*(inp.sneerL+inp.sneerR)+.22*zM*(inp.smileL+inp.smileR))*dt;
  S.vs*=1-(inp.puff>.5?5:1.8)*dt;const ps=S.s;S.s+=S.vs*dt;
- S.vx+=(.6*Math.sin(ro*Math.PI/180)+1.8*(zE*(inp.sqR-inp.sqL)+zN*(inp.sneerR-inp.sneerL)+zM*(inp.smileR-inp.smileL))-9*zM*S.x*inp.frown)*dt;S.vx*=1-(2.5+3*zM*inp.frown)*dt;S.x+=S.vx*dt;
+ S.vx+=(.6*Math.sin(ro*Math.PI/180)+1.3*(zE*(inp.sqR-inp.sqL)+zN*(inp.sneerR-inp.sneerL)+zM*(inp.smileR-inp.smileL))-9*zM*S.x*inp.frown)*dt;S.vx*=1-(2.5+3*zM*inp.frown)*dt;S.x+=S.vx*dt;
  if(S.s>.5&&S.s<.8&&Math.abs(S.x)<.45){if(ps<=.5){S.s=.5;if(S.vs>0)S.vs=0}else if(ps>=.8){S.s=.8;if(S.vs<0)S.vs=0}else{S.x=S.x<0?-.45:.45;S.vx=0}}
  const lim=32-14*S.s;S.risk=Math.max(p/lim,-p/26,Math.abs(ro)/30);
  let why=null;if(p>lim)why='Too far forward!';else if(p<-26||S.s<0)why='Slid off the back!';else if(Math.abs(ro)>30||Math.abs(S.x)>1)why='Rolled off the side!';
