@@ -35,7 +35,7 @@ const P=[[0,-135],[0,-95],[0,-25],[0,50],[0,92]];
 let mode='touch',st='ready',S,inp={roll:0,pitch:0,brow:0,furrow:0,sqL:0,sqR:0,sneerL:0,sneerR:0,smileL:0,smileR:0,frown:0,puff:0,jaw:0},tgt={roll:0,pitch:0,brow:0,furrow:0,sqL:0,sqR:0,sneerL:0,sneerR:0,smileL:0,smileR:0,frown:0,puff:0,jaw:0};
 let neutral={roll:0,pitch:0},inv=1,keys={},drag=null,lm=null,tm=0,best=null,fall=null;
 const ui={brow:0,furrow:0,sqL:0,sqR:0,sneerL:0,sneerR:0,smileL:0,smileR:0,frown:0,puff:0,jaw:0};
-const ZN=[[-200,-48,'BROWS'],[-48,-12,'SQUINT'],[-12,40,'SNEER / SMIRK'],[40,200,'POINT YOUR LIPS']];
+const ZN=[[-200,-48,'BROWS'],[-48,-32,'SQUINT'],[-32,40,'SNEER / SMIRK'],[40,200,'POINT YOUR LIPS']];
 inp.lipL=0;inp.lipR=0;tgt.lipL=0;tgt.lipR=0;ui.lipL=0;ui.lipR=0;
 function reset(){S={s:.08,vs:0,x:0,vx:0,t:0,browPrev:0,cool:0}}
 reset();
@@ -81,9 +81,9 @@ function update(dt){
  const p=inp.pitch+wob*(mode==='cam'?0:1),ro=inp.roll;
  const push=Math.abs(p)<3?0:(p-Math.sign(p)*3);
  const y=pos(S.s,S.x)[1],zw=i=>Math.max(0,Math.min(1,(y-ZN[i][0])/10))*Math.max(0,Math.min(1,(ZN[i][1]-y)/10)),zB=zw(0),zE=zw(1),zN=zw(2),zM=zw(3);
- const lipT=Math.max(inp.lipL,inp.lipR);S.vs+=(.3*zB*(inp.furrow-inp.brow)+.3*zE*(inp.sqL+inp.sqR)+1.0*zN*(Math.max(inp.sneerL,inp.smileL)+Math.max(inp.sneerR,inp.smileR))+.35*zM*lipT*Math.max(.3,1-(S.s-.7)*2.3)+.18*zM*(1-Math.max(0,Math.min(1,(-inp.pitch-2)/8))))*dt;
+ const lipT=Math.max(inp.lipL,inp.lipR);S.vs+=(.3*zB*(inp.furrow-inp.brow)+.3*zE*(inp.sqL+inp.sqR)+.55*zN*(Math.max(inp.sneerL,inp.smileL)+Math.max(inp.sneerR,inp.smileR))+.35*zM*lipT*Math.max(.3,1-(S.s-.7)*2.3)+.18*zM*(1-Math.max(0,Math.min(1,(-inp.pitch-2)/8))))*dt;
  S.vs*=1-(inp.puff>.5?5:1.8)*dt;const ps=S.s;S.s+=S.vs*dt;
- S.vx+=(1.0*Math.max(-1,Math.min(1,ro/14))+.5*(zE*(inp.sqR-inp.sqL)+.35*zN*(Math.max(inp.sneerR,inp.smileR)-Math.max(inp.sneerL,inp.smileL)))+.8*S.x*zM+1.3*lipSw*zM*(inp.lipR-inp.lipL)-9*zM*S.x*inp.frown)*dt;S.vx*=1-(2.5+2*zN+3*zM*inp.frown)*dt;window.zdbg='s'+S.s.toFixed(2)+' x'+S.x.toFixed(2)+' zones '+[zB,zE,zN,zM].map(v=>v.toFixed(1)).join('/');S.x+=S.vx*dt;
+ S.vx+=(1.0*Math.max(-1,Math.min(1,ro/14))+.5*(zE*(inp.sqR-inp.sqL)+.8*zN*Math.max(inp.sneerL,inp.smileL,inp.sneerR,inp.smileR)*(Math.abs(Math.max(inp.sneerR,inp.smileR)-Math.max(inp.sneerL,inp.smileL))>.15?Math.sign(Math.max(inp.sneerR,inp.smileR)-Math.max(inp.sneerL,inp.smileL)):(S.x?Math.sign(S.x):(ro>=0?1:-1))))+.8*S.x*zM+1.3*lipSw*zM*(inp.lipR-inp.lipL)-9*zM*S.x*inp.frown)*dt;S.vx*=1-(2.5+2*zN+3*zM*inp.frown)*dt;window.zdbg='s'+S.s.toFixed(2)+' x'+S.x.toFixed(2)+' zones '+[zB,zE,zN,zM].map(v=>v.toFixed(1)).join('/');S.x+=S.vx*dt;
  if(S.s>.5&&S.s<.8&&Math.abs(S.x)<.45){if(ps<=.5){S.s=.5;if(S.vs>0)S.vs=0}else if(ps>=.8){S.s=.8;if(S.vs<0)S.vs=0}else{S.x=S.x<0?-.45:.45;S.vx=0}}
  const lim=32-14*S.s;S.risk=Math.max(p/lim,-p/26,Math.abs(ro)/38);
  let why=null;if(p>lim)why='Too far forward!';else if(p<-26||S.s<0)why='Slid off the back!';else if(Math.abs(ro)>38||Math.abs(S.x)>(window.xlim||1.7))why='Rolled off the side!';
